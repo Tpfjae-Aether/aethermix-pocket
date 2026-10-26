@@ -71,13 +71,22 @@ struct PlayerState: Codable {
     var queue_len: Int?
     var queue_pos: Int?
     var shuffle: Bool?
-    var repeat: Int?
+    // `repeat` is a Swift keyword, so the property cannot carry the wire name
+    // directly. CodingKeys maps it back; once CodingKeys exists every key must
+    // be listed, or the others silently stop decoding.
+    var repeatMode: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case title, artist, album, cover_url, duration_ms, position_ms, playing
+        case track_id, origin, status, levels, volume, queue_len, queue_pos, shuffle
+        case repeatMode = "repeat"
+    }
 
     static let empty = PlayerState(
         title: "", artist: "", album: "", cover_url: "", duration_ms: 0,
         position_ms: 0, playing: false, track_id: nil, origin: "", status: "",
         levels: Array(repeating: 0, count: 20), volume: 70,
-        queue_len: 0, queue_pos: 0, shuffle: false, repeat: 1)
+        queue_len: 0, queue_pos: 0, shuffle: false, repeatMode: 1)
 
     var coverURL: URL? { Bridge.shared.coverURL(cover_url) }
 }

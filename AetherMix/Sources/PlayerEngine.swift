@@ -476,9 +476,11 @@ final class PlayerEngine: NSObject, ObservableObject {
         }
     }
 
-    func stopEverything() {
+    func stopEverything() async {
         stopLocal(keepPublished: false)
-        try? Bridge.shared.hit("/stop")
+        // `hit` is async, so a bare try? inside a sync body does not compile;
+        // the bridge call is fire-and-forget but still has to be awaited
+        _ = try? await Bridge.shared.hit("/stop")
     }
 
     // ------------------------------------------------------------- now playing

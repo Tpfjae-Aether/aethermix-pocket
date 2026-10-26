@@ -150,4 +150,55 @@ for f, text in src.items():
             tmiss += 1
 print('%d unknown Theme members' % tmiss)
 
-sys.exit(1 if bad or total or miss or tmiss else 0)
+# ------------------------------------------------- reserved words and awaiting
+# Tree-sitter happily parses `var repeat: Int?` and an async call with no await,
+# but the Swift compiler rejects both, and those were exactly what failed the
+# first CI build. A miss here costs a second; a miss in CI costs three minutes.
+KEYWORDS = {
+    'repeat', 'for', 'while', 'if', 'else', 'switch', 'case', 'default', 'break',
+    'continue', 'return', 'func', 'var', 'let', 'class', 'struct', 'enum',
+    'protocol', 'extension', 'import', 'in', 'is', 'as', 'do', 'catch', 'throw',
+    'throws', 'rethrows', 'try', 'await', 'async', 'guard', 'defer', 'init',
+    'self', 'super', 'true', 'false', 'nil', 'where', 'inout', 'operator',
+    'static', 'public', 'private', 'fileprivate', 'internal', 'open', 'final',
+    'lazy', 'weak', 'unowned', 'mutating', 'nonmutating', 'convenience',
+    'required', 'override', 'subscript', 'typealias', 'associatedtype',
+    'deinit', 'some', 'any', 'each', 'borrowing', 'consuming', 'package',
+    'actor', 'nonisolated', 'distributed', 'macro', 'yield',
+}
+
+KW_DECL = re.compile(
+    r'^[ \t]*(?:@\w+(?:\([^)]*\))?\s+)*(?:public |private |fileprivate |internal '
+    r'|static |final |override |lazy |weak |nonisolated |mutating |convenience '
+    r'|required )*(var|let|func|case)\s+([A-Za-z_]\w*)', re.M)
+
+kwbad = 0
+for f, text in src.items():
+    for m in KW_DECL.finditer(text):
+        if m.group(2) in KEYWORDS:
+            ln = text[:m.start()].count('\n') + 1
+            print('KEYWORD %s:%d  %s %s' % (f, ln, m.group(1), m.group(2)))
+            kwbad += 1
+print('%d reserved words used as identifiers' % kwbad)
+
+# an async Bridge method called without await does not compile
+ASYNC_FN = re.compile(r'func\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\([^)]*\)\s*(?:async|rethrows)')
+async_names = set()
+for f, text in src.items():
+    if f.replace('\\', '/').endswith('Bridge.swift'):
+        async_names |= set(ASYNC_FN.findall(text))
+
+awbad = 0
+for f, text in src.items():
+    for m in re.finditer(r'(?<![\w.])Bridge\.shared\.([A-Za-z_]\w*)\s*\(', text):
+        nm = m.group(1)
+        if nm not in async_names:
+            continue
+        line_start = text.rfind('\n', 0, m.start()) + 1
+        if 'await' not in text[line_start:m.start()]:
+            ln = text[:m.start()].count('\n') + 1
+            print('AWAIT %s:%d  Bridge.shared.%s is async and needs await' % (f, ln, nm))
+            awbad += 1
+print('%d async Bridge calls without await' % awbad)
+
+sys.exit(1 if bad or total or miss or tmiss or kwbad or awbad else 0)
