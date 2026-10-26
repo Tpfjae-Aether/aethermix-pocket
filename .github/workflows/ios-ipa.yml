@@ -42,8 +42,12 @@ jobs:
       # expensive Xcode build
       - name: Static check the Swift sources
         run: |
-          python3 -m pip install --quiet tree-sitter tree-sitter-swift
-          python3 tools/swift_check.py
+          # the runner Python is externally managed (PEP 668): a system
+          # pip install exits 1 here, so the check gets its own venv
+          python3 -m venv "$RUNNER_TEMP/swiftcheck"
+          "$RUNNER_TEMP/swiftcheck/bin/python" -m pip install --quiet \
+            tree-sitter tree-sitter-swift
+          "$RUNNER_TEMP/swiftcheck/bin/python" tools/swift_check.py
 
       - name: Install XcodeGen
         run: brew install xcodegen
